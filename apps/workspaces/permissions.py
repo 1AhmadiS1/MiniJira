@@ -1,7 +1,18 @@
 from rest_framework import permissions
 from rest_framework.permissions import BasePermission
 
-from .models import WorkspaceMember
+from .models import WorkspaceMember, Workspace
+
+
+class IsWorkspace(BasePermission):
+    """Only a workspace member may view the workspace."""
+    def has_permission(self, request, view):
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user == obj.created_by
 
 
 class IsWorkspaceOwner(BasePermission):

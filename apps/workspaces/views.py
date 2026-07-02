@@ -1,16 +1,17 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
-from apps.workspaces.permissions import IsWorkspaceOwner
+from apps.workspaces.permissions import IsWorkspaceOwner, IsWorkspace
 from .models import Workspace, WorkspaceMember
 from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer
+
 # Create your views here.
 
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
 
     serializer_class = WorkspaceSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsWorkspace]
 
     def get_queryset(self):
         return Workspace.objects.filter(memberships__user=self.request.user)
