@@ -8,7 +8,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 class UserAdmin(BaseUserAdmin):
     ordering = ['email']
     list_display = ['email', 'first_name',
-                    'last_name', 'is_staff', 'is_active']
+                    'last_name', 'is_staff', 'is_active', "id"]
     list_filter = ['is_staff', 'is_active']
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
