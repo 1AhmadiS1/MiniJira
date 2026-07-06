@@ -23,6 +23,11 @@ class Project(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "name"],
+                name="unique_project_name_per_workspace"
+            )
+        ]
     def __str__(self):
         return self.name

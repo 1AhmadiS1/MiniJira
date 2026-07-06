@@ -48,4 +48,3 @@ class WorkspaceMemberSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Cannot change role of an OWNER.")
         return value
-
