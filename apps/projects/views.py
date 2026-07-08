@@ -9,6 +9,9 @@ from .permissions import IsWorkspaceManager
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated, IsWorkspaceManager]
+    filterset_fields = ["workspace"]              # ?workspace=
+    search_fields = ["name", "description"]       # ?search=
+    ordering_fields = ["created_at", "updated_at", "name"]
 
     def get_queryset(self):
         # Only projects in workspaces the requester belongs to.

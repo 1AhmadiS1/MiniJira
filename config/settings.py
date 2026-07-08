@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
+    "django_filters",
 
     'apps.users.apps.UsersConfig',
     'apps.workspaces.apps.WorkspacesConfig',
@@ -119,6 +120,18 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Paginate every list endpoint: responses become
+    # {"count", "next", "previous", "results": [...]} instead of a bare array.
+    "DEFAULT_PAGINATION_CLASS":
+        "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    # Global filter/search/sort backends. Each viewset opts in by declaring
+    # filterset_fields / search_fields / ordering_fields.
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",  # ?field=value
+        "rest_framework.filters.SearchFilter",                # ?search=text
+        "rest_framework.filters.OrderingFilter",              # ?ordering=field
+    ),
 }
 
 

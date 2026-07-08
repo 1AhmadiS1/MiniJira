@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Issue
+from .models import Issue, Comment
 
 
 @admin.register(Issue)
@@ -9,3 +9,10 @@ class IssueAdmin(admin.ModelAdmin):
                     'assignee', 'created_by', 'created_at', 'updated_at')
     search_fields = ('title', 'description')
     list_filter = ('issue_type', 'status', 'priority', 'project', 'created_at')
+
+
+@admin.register(Comment)
+class CommentAdmin(admin.ModelAdmin):
+    list_display = ('issue', 'author', 'created_at', 'updated_at')
+    search_fields = ('body',)
+    list_filter = ('created_at',)

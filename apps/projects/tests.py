@@ -122,7 +122,7 @@ class ProjectTests(APITestCase):
         self.client.force_authenticate(self.member)
         resp = self.client.get(PROJECTS_URL)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        names = [p["name"] for p in resp.data]
+        names = [p["name"] for p in resp.data["results"]]
         self.assertIn("Mine", names)
         self.assertNotIn("Foreign", names)
 

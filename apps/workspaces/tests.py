@@ -52,7 +52,7 @@ class WorkspaceEndpointTests(APITestCase):
 
         resp = self.client.get(WORKSPACES_URL)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        names = [w["name"] for w in resp.data]
+        names = [w["name"] for w in resp.data["results"]]
         self.assertIn("Mine", names)
         self.assertNotIn("Foreign", names)
 
@@ -494,7 +494,7 @@ class WorkspaceEndpointTests(APITestCase):
 
         resp = self.client.get(MEMBERS_URL)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        ws_ids = {m["workspace"] for m in resp.data}
+        ws_ids = {m["workspace"] for m in resp.data["results"]}
         self.assertIn(ws_id, ws_ids)
         self.assertNotIn(foreign.id, ws_ids)
 

@@ -76,3 +76,48 @@ class CanManageIssue(BasePermission):
             if new_id != obj.assignee_id:
                 return False
         return True
+
+
+class CanManageComment(BasePermission):
+    """Who may do what to a comment on an issue.
+
+    A comment lives on an Issue -> Project -> Workspace.
+      - view (SAFE): any workspace member (already scoped by get_queryset).
+      - create: any member of the issue's workspace may comment.
+      - edit (PUT/PATCH): the AUTHOR only - nobody rewrites someone else's words.
+      - delete: the AUTHOR, or a MANAGER (workspace owner/admin) for moderation.
+    """
+
+    _MANAGER_ROLES = (WorkspaceMember.Role.OWNER, WorkspaceMember.Role.ADMIN)
+
+    def has_permission(self, request, view):
+        if request.method != "POST":
+            return True
+        issue_id = request.data.get("issue")
+        if not issue_id:
+            # No issue given: let the serializer raise a clean 400.
+            return True
+        # Any member of the issue's workspace may comment.
+        return WorkspaceMember.objects.filter(
+            user=request.user,
+            workspace__projects__issues__id=issue_id,
+        ).exists()
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        is_author = obj.author_id == request.user.id
+
+        if request.method == "DELETE":
+            if is_author:
+                return True
+            # Managers may delete others' comments (moderation).
+            return WorkspaceMember.objects.filter(
+                user=request.user,
+                workspace=obj.issue.project.workspace,
+                role__in=self._MANAGER_ROLES,
+            ).exists()
+
+        # PUT / PATCH - only the author may edit their own comment.
+        return is_author

@@ -75,3 +75,31 @@ class Issue(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Comment(models.Model):
+    """A discussion note on an Issue.
+
+    `author` is server-set to the commenter. Authors own their words (only they
+    may edit); managers (workspace owner/admin) may delete for moderation.
+    """
+
+    issue = models.ForeignKey(
+        Issue,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.author} on {self.issue}"

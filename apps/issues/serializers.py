@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.workspaces.models import WorkspaceMember
-from .models import Issue
+from .models import Issue, Comment
 
 
 class IssueSerializer(serializers.ModelSerializer):
@@ -46,3 +46,21 @@ class IssueSerializer(serializers.ModelSerializer):
         # ignored (it's read-only above).
         user = self.context["request"].user
         return Issue.objects.create(created_by=user, **validated_data)
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ["id", "issue", "author", "body", "created_at", "updated_at"]
+        read_only_fields = ["id", "author", "created_at", "updated_at"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A comment can't be moved to another issue after creation.
+        if self.instance is not None:
+            self.fields["issue"].read_only = True
+
+    def create(self, validated_data):
+        # The author is always the requester; a client-sent author is ignored.
+        user = self.context["request"].user
+        return Comment.objects.create(author=user, **validated_data)
