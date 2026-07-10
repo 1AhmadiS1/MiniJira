@@ -103,3 +103,37 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"{self.author} on {self.issue}"
+
+
+def attachment_upload_path(instance, filename):
+    """Group uploaded files by issue so the media tree stays tidy."""
+    return f"attachments/issue_{instance.issue_id}/{filename}"
+
+
+class Attachment(models.Model):
+    """A file uploaded against an Issue (screenshot, log, spec, etc.).
+
+    `uploaded_by` is server-set to the uploader. The uploader owns their file
+    (may replace/delete it); managers (workspace owner/admin) may also delete
+    for moderation. Storage is backend-agnostic: local /media in dev, S3 in
+    prod via django-storages env config (no code change).
+    """
+
+    issue = models.ForeignKey(
+        Issue,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to=attachment_upload_path)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.file.name} on {self.issue}"

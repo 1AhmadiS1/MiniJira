@@ -38,7 +38,9 @@ class IsWorkspaceOwner(BasePermission):
 
         workspace_id = request.data.get("workspace")
         if not workspace_id:
-            return False
+            # Missing required field is a VALIDATION problem, not a permission
+            # one: let the serializer raise the clean 400 instead of a 403.
+            return True
 
         requester = WorkspaceMember.objects.filter(
             user=request.user,

@@ -160,6 +160,13 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (user uploads: issue attachments)
+# Dev serves from the local /media dir. In production set S3 via env
+# (django-storages + boto3 already in the stack) - a config-only switch, no
+# code change. Ephemeral/multi-instance hosts MUST use S3, not local disk.
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

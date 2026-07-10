@@ -121,3 +121,42 @@ class CanManageComment(BasePermission):
 
         # PUT / PATCH - only the author may edit their own comment.
         return is_author
+
+
+class CanManageAttachment(BasePermission):
+    """Who may do what to a file attached to an issue.
+
+    An attachment lives on an Issue -> Project -> Workspace.
+      - view (SAFE): any workspace member (already scoped by get_queryset).
+      - create: any member of the issue's workspace may upload.
+      - edit (PUT/PATCH) / delete: the UPLOADER, or a MANAGER (workspace
+        owner/admin) for moderation.
+    """
+
+    _MANAGER_ROLES = (WorkspaceMember.Role.OWNER, WorkspaceMember.Role.ADMIN)
+
+    def has_permission(self, request, view):
+        if request.method != "POST":
+            return True
+        issue_id = request.data.get("issue")
+        if not issue_id:
+            # No issue given: let the serializer raise a clean 400.
+            return True
+        # Any member of the issue's workspace may upload.
+        return WorkspaceMember.objects.filter(
+            user=request.user,
+            workspace__projects__issues__id=issue_id,
+        ).exists()
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        if obj.uploaded_by_id == request.user.id:
+            return True
+        # Managers may edit/delete others' attachments (moderation).
+        return WorkspaceMember.objects.filter(
+            user=request.user,
+            workspace=obj.issue.project.workspace,
+            role__in=self._MANAGER_ROLES,
+        ).exists()

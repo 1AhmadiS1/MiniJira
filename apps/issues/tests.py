@@ -1,15 +1,21 @@
+import shutil
+import tempfile
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.workspaces.models import Workspace, WorkspaceMember
 from apps.projects.models import Project
-from .models import Issue, Comment
+from .models import Issue, Comment, Attachment
 
 User = get_user_model()
 
 ISSUES_URL = "/api/issues/"
 COMMENTS_URL = "/api/comments/"
+ATTACHMENTS_URL = "/api/attachments/"
 
 
 def make_user(email):
@@ -649,3 +655,204 @@ class IssueFilterSearchPaginationTests(APITestCase):
         resp = self.client.get(COMMENTS_URL + f"?issue={issue_a.id}")
         bodies = [c["body"] for c in resp.data["results"]]
         self.assertEqual(bodies, ["on A"])
+
+
+_TEMP_MEDIA = tempfile.mkdtemp()
+
+
+@override_settings(MEDIA_ROOT=_TEMP_MEDIA)
+class AttachmentTests(APITestCase):
+    """File uploads on issues.
+
+    Matrix (attachments: /api/attachments/<id>/):
+      action | manager | uploader | other member | outsider
+      view   |  yes    |  yes     | yes          | no (404, scoped out)
+      create |  yes    |   -      | yes          | no (403)
+      edit   |  yes    |  yes     | no           | no
+      delete |  yes    |  yes     | no           | no
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(_TEMP_MEDIA, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.owner = make_user("a_owner@example.com")
+        self.admin = make_user("a_admin@example.com")
+        self.member = make_user("a_member@example.com")
+        self.member2 = make_user("a_member2@example.com")
+        self.outsider = make_user("a_outsider@example.com")
+
+        self.ws = make_workspace("Team", self.owner)
+        add_member(self.ws, self.admin, WorkspaceMember.Role.ADMIN)
+        add_member(self.ws, self.member, WorkspaceMember.Role.MEMBER)
+        add_member(self.ws, self.member2, WorkspaceMember.Role.MEMBER)
+
+        self.project = Project.objects.create(
+            name="P", workspace=self.ws, created_by=self.owner
+        )
+        self.issue = Issue.objects.create(
+            title="Bug", project=self.project, created_by=self.member
+        )
+
+    def _upload_file(self, name="log.txt", content=b"data"):
+        return SimpleUploadedFile(name, content, content_type="text/plain")
+
+    def _make_attachment(self, uploader=None):
+        return Attachment.objects.create(
+            issue=self.issue,
+            file=self._upload_file(),
+            uploaded_by=uploader or self.member,
+        )
+
+    # --- create ---
+
+    def test_create_requires_auth(self):
+        resp = self.client.post(
+            ATTACHMENTS_URL,
+            {"issue": self.issue.id, "file": self._upload_file()},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_member_can_upload(self):
+        """Any workspace member may upload a file to an issue."""
+        self.client.force_authenticate(self.member2)
+        resp = self.client.post(
+            ATTACHMENTS_URL,
+            {"issue": self.issue.id, "file": self._upload_file()},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        # uploaded_by is server-set to the requester, not spoofable.
+        att = Attachment.objects.get(id=resp.data["id"])
+        self.assertEqual(att.uploaded_by, self.member2)
+
+    def test_uploaded_by_is_server_set(self):
+        self.client.force_authenticate(self.member2)
+        resp = self.client.post(
+            ATTACHMENTS_URL,
+            {
+                "issue": self.issue.id,
+                "file": self._upload_file(),
+                "uploaded_by": self.owner.id,  # spoof attempt, ignored
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        att = Attachment.objects.get(id=resp.data["id"])
+        self.assertEqual(att.uploaded_by, self.member2)
+
+    def test_outsider_cannot_upload(self):
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.post(
+            ATTACHMENTS_URL,
+            {"issue": self.issue.id, "file": self._upload_file()},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_upload_without_issue_returns_400(self):
+        """Missing required `issue` is a validation problem -> 400, not 403."""
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(
+            ATTACHMENTS_URL,
+            {"file": self._upload_file()},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("issue", resp.data)
+
+    def test_upload_without_file_returns_400(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(
+            ATTACHMENTS_URL,
+            {"issue": self.issue.id},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", resp.data)
+
+    # --- view / scoping ---
+
+    def test_list_scoped_to_my_workspaces(self):
+        self._make_attachment(uploader=self.member)
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(ATTACHMENTS_URL)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["count"], 1)
+
+    def test_outsider_cannot_see_attachment(self):
+        att = self._make_attachment()
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.get(f"{ATTACHMENTS_URL}{att.id}/")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_member_can_view_attachment(self):
+        att = self._make_attachment()
+        self.client.force_authenticate(self.member2)
+        resp = self.client.get(f"{ATTACHMENTS_URL}{att.id}/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["filename"], "log.txt")
+
+    # --- delete ---
+
+    def test_uploader_can_delete(self):
+        att = self._make_attachment(uploader=self.member)
+        self.client.force_authenticate(self.member)
+        resp = self.client.delete(f"{ATTACHMENTS_URL}{att.id}/")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_manager_can_delete_others_attachment(self):
+        att = self._make_attachment(uploader=self.member)
+        self.client.force_authenticate(self.admin)
+        resp = self.client.delete(f"{ATTACHMENTS_URL}{att.id}/")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_other_member_cannot_delete(self):
+        att = self._make_attachment(uploader=self.member)
+        self.client.force_authenticate(self.member2)
+        resp = self.client.delete(f"{ATTACHMENTS_URL}{att.id}/")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    # --- edit ---
+
+    def test_other_member_cannot_replace_file(self):
+        att = self._make_attachment(uploader=self.member)
+        self.client.force_authenticate(self.member2)
+        resp = self.client.patch(
+            f"{ATTACHMENTS_URL}{att.id}/",
+            {"file": self._upload_file(name="new.txt")},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_issue_is_read_only_on_update(self):
+        att = self._make_attachment(uploader=self.member)
+        other_issue = Issue.objects.create(
+            title="Other", project=self.project, created_by=self.member
+        )
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(
+            f"{ATTACHMENTS_URL}{att.id}/",
+            {"issue": other_issue.id},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        att.refresh_from_db()
+        self.assertEqual(att.issue_id, self.issue.id)  # unchanged
+
+    # --- filter ---
+
+    def test_filter_attachments_by_issue(self):
+        issue_b = Issue.objects.create(
+            title="B", project=self.project, created_by=self.member
+        )
+        self._make_attachment(uploader=self.member)  # on self.issue
+        Attachment.objects.create(
+            issue=issue_b, file=self._upload_file(), uploaded_by=self.member
+        )
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(ATTACHMENTS_URL + f"?issue={issue_b.id}")
+        self.assertEqual(resp.data["count"], 1)

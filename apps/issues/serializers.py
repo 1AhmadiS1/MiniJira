@@ -1,7 +1,9 @@
+import os
+
 from rest_framework import serializers
 
 from apps.workspaces.models import WorkspaceMember
-from .models import Issue, Comment
+from .models import Issue, Comment, Attachment
 
 
 class IssueSerializer(serializers.ModelSerializer):
@@ -64,3 +66,29 @@ class CommentSerializer(serializers.ModelSerializer):
         # The author is always the requester; a client-sent author is ignored.
         user = self.context["request"].user
         return Comment.objects.create(author=user, **validated_data)
+
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    # The original file name, convenient for clients (the stored path includes
+    # the issue folder prefix).
+    filename = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Attachment
+        fields = ["id", "issue", "file", "filename", "uploaded_by",
+                  "created_at"]
+        read_only_fields = ["id", "uploaded_by", "created_at"]
+
+    def get_filename(self, obj):
+        return os.path.basename(obj.file.name)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # An attachment can't be moved to another issue after creation.
+        if self.instance is not None:
+            self.fields["issue"].read_only = True
+
+    def create(self, validated_data):
+        # The uploader is always the requester; a client-sent value is ignored.
+        user = self.context["request"].user
+        return Attachment.objects.create(uploaded_by=user, **validated_data)

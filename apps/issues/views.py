@@ -1,9 +1,13 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Issue, Comment
-from .serializers import IssueSerializer, CommentSerializer
-from .permissions import CanManageIssue, CanManageComment
+from .models import Issue, Comment, Attachment
+from .serializers import (
+    IssueSerializer, CommentSerializer, AttachmentSerializer,
+)
+from .permissions import (
+    CanManageIssue, CanManageComment, CanManageAttachment,
+)
 
 
 class IssueViewSet(viewsets.ModelViewSet):
@@ -35,5 +39,19 @@ class CommentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Only comments on issues in workspaces the requester belongs to.
         return Comment.objects.filter(
+            issue__project__workspace__memberships__user=self.request.user
+        )
+
+
+class AttachmentViewSet(viewsets.ModelViewSet):
+    serializer_class = AttachmentSerializer
+    permission_classes = [IsAuthenticated, CanManageAttachment]
+    # ?issue=&uploaded_by=  (list one issue's files)
+    filterset_fields = ["issue", "uploaded_by"]
+    ordering_fields = ["created_at"]
+
+    def get_queryset(self):
+        # Only attachments on issues in workspaces the requester belongs to.
+        return Attachment.objects.filter(
             issue__project__workspace__memberships__user=self.request.user
         )

@@ -78,6 +78,20 @@ class WorkspaceEndpointTests(APITestCase):
             ).exists()
         )
 
+    def test_add_member_without_workspace_returns_400(self):
+        """Bug #5: a missing required `workspace` is a VALIDATION problem, so
+        the serializer should return 400 (not a misleading 403 from the
+        permission layer)."""
+        self._create_workspace(self.owner)
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            MEMBERS_URL,
+            {"user": self.other.id, "role": "member"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("workspace", resp.data)
+
     def test_non_owner_cannot_add_member(self):
         """Point 6: a plain member cannot add members -> 403."""
         ws_id = self._create_workspace(self.owner)
