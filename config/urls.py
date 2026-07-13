@@ -1,6 +1,9 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.core.cache import cache
+from django.db import connection
+from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -9,7 +12,31 @@ from drf_spectacular.views import (
 )
 
 
+def health_check(request):
+    checks = {"database": False, "cache": False}
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            checks["database"] = cursor.fetchone()[0] == 1
+    except Exception:
+        pass
+
+    try:
+        cache.set("health-check", "ok", timeout=10)
+        checks["cache"] = cache.get("health-check") == "ok"
+    except Exception:
+        pass
+
+    healthy = all(checks.values())
+    return JsonResponse(
+        {"status": "ok" if healthy else "unhealthy", "checks": checks},
+        status=200 if healthy else 503,
+    )
+
+
 urlpatterns = [
+    path("health/", health_check, name="health"),
     path("admin/", admin.site.urls),
 
     # API routes

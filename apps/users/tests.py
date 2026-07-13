@@ -6,6 +6,20 @@ from rest_framework.test import APITestCase
 User = get_user_model()
 
 
+class HealthCheckTests(APITestCase):
+    def test_health_check_reports_database_and_cache(self):
+        resp = self.client.get(reverse("health"))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            resp.json(),
+            {
+                "status": "ok",
+                "checks": {"database": True, "cache": True},
+            },
+        )
+
+
 class AuthEndpointTests(APITestCase):
     def test_register_creates_user(self):
         resp = self.client.post(
