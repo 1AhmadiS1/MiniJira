@@ -43,10 +43,10 @@ desktop.ini
 ~$*.xlsx
 
 # Personal notes
-progress.md
-aws-production.md
-disscusion.docx
 commandline.docx
+disscusion.docx
+aws-production.md
+progress.md
 
 # Coverage / test artifacts
 .coverage
