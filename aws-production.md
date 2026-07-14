@@ -4,6 +4,71 @@ This document records the AWS and Docker production discussion. It is a plan,
 not a record of resources already deployed. No EC2, ECR, RDS, ElastiCache, S3,
 DNS, or TLS resource has been created by the repository changes.
 
+## Live deployment checkpoint - 2026-07-14
+
+### Where we are
+
+```text
+Phase 1 - Secure/configure AWS account:  COMPLETE
+Phase 2 - Repository preparation:        COMPLETE
+Phase 3 - Create security groups:        AWAITING USER APPROVAL
+Phase 4 onward - AWS resources/deploy:   NOT STARTED
+```
+
+No MiniJira infrastructure has been created and no deployment resource is
+currently consuming promotional credits.
+
+### What we did - account and access
+
+- Selected **Europe (Frankfurt), `eu-central-1`** and will keep MiniJira
+  resources there unless Console eligibility requires a change.
+- Root MFA is enabled, root has no access keys, and root is reserved for
+  account-only operations.
+- Created the MFA-protected `minijira-admin` IAM user for daily work.
+- Configured `aws login --profile minijira-admin`, providing a temporary
+  browser-authenticated CLI session without permanent access keys.
+- Confirmed Free Tier notifications are enabled; budget creation was deferred.
+- Kept the account on its promotional-credit Free Plan. IAM Identity Center
+  with AWS Organizations was not enabled because joining an organization would
+  upgrade this Free Plan and expire its remaining credits.
+
+### What we did - production preparation
+
+- Production Compose pulls `${ECR_IMAGE}` and excludes Docker PostgreSQL.
+  Development still builds locally with Docker PostgreSQL and Redis.
+- Production can use ElastiCache through `REDIS_URL` or the memory-limited
+  `local-redis` profile.
+- Gunicorn workers/timeouts are configurable, starting at two workers for a
+  small EC2 instance.
+- Migrations and static collection are explicit one-off deployment commands.
+- Added `GET /health/` for database/cache checks and container health ordering.
+- HTTPS-only Django settings remain off until Nginx TLS is verified.
+- Real environment files and AWS credentials remain outside Git; tracked
+  environment templates contain placeholders only.
+
+### Verification completed
+
+- Full suite: **128 tests passed**.
+- Django checks and development/production Compose validation passed.
+- The image builds successfully, is approximately 90 MB, runs as non-root
+  `django`, and passes Django's system check inside the container.
+
+### Phase 3 inspection and next action
+
+A read-only inspection found one default VPC, three default public subnets, and
+only the default security group in Frankfurt. No AWS changes were made.
+
+Pending explicit approval, create:
+
+1. `minijira-ec2-sg`: public inbound 80/443 only; prefer AWS Systems Manager
+   Session Manager over opening SSH 22.
+2. `minijira-rds-sg`: inbound 5432 only from `minijira-ec2-sg`.
+3. `minijira-cache-sg`: inbound 6379 only from `minijira-ec2-sg` if managed
+   ElastiCache is used.
+
+Security groups do not consume promotional credits, but creating them changes
+shared AWS infrastructure and therefore requires explicit approval.
+
 ## Goal
 
 Deploy MiniJira using services that the AWS Console explicitly shows as
