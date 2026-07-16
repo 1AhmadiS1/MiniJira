@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework.throttling import SimpleRateThrottle
 
 User = get_user_model()
 
@@ -17,6 +21,53 @@ class HealthCheckTests(APITestCase):
                 "status": "ok",
                 "checks": {"database": True, "cache": True},
             },
+        )
+
+
+class GeneralThrottleTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.throttle_rates = patch.dict(
+            SimpleRateThrottle.THROTTLE_RATES,
+            {"anon": "2/minute", "user": "2/minute"},
+        )
+        self.throttle_rates.start()
+
+    def tearDown(self):
+        self.throttle_rates.stop()
+        cache.clear()
+
+    def test_anonymous_requests_are_throttled_by_ip(self):
+        url = reverse("register")
+
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    def test_authenticated_requests_are_throttled_by_user(self):
+        user = User.objects.create_user(
+            email="throttle@example.com",
+            password="supersecret123",
+            first_name="Throttle",
+            last_name="Test",
+        )
+        self.client.force_authenticate(user=user)
+        url = reverse("me")
+
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
         )
 
 
