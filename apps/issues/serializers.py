@@ -79,7 +79,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
                   "created_at"]
         read_only_fields = ["id", "uploaded_by", "created_at"]
 
-    def get_filename(self, obj):
+    def get_filename(self, obj) -> str:
         return os.path.basename(obj.file.name)
 
     def __init__(self, *args, **kwargs):

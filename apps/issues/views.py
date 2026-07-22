@@ -11,6 +11,7 @@ from .permissions import (
 
 
 class IssueViewSet(viewsets.ModelViewSet):
+    queryset = Issue.objects.all()
     serializer_class = IssueSerializer
     permission_classes = [IsAuthenticated, CanManageIssue]
     # ?project=&status=&priority=&issue_type=&assignee=
@@ -29,6 +30,7 @@ class IssueViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
+    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated, CanManageComment]
     # ?issue=&author=  (list a single issue's comment thread)
@@ -44,6 +46,7 @@ class CommentViewSet(viewsets.ModelViewSet):
 
 
 class AttachmentViewSet(viewsets.ModelViewSet):
+    queryset = Attachment.objects.all()
     serializer_class = AttachmentSerializer
     permission_classes = [IsAuthenticated, CanManageAttachment]
     # ?issue=&uploaded_by=  (list one issue's files)

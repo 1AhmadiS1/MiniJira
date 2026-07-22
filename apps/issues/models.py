@@ -1,5 +1,7 @@
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
+from django.db.models.signals import post_delete, post_save, pre_save
+from django.dispatch import receiver
 
 from apps.projects.models import Project
 
@@ -137,3 +139,38 @@ class Attachment(models.Model):
 
     def __str__(self):
         return f"{self.file.name} on {self.issue}"
+
+
+def delete_attachment_file_on_commit(file):
+    """Remove a stored attachment only after its database change commits."""
+    if file.name:
+        storage = file.storage
+        name = file.name
+        transaction.on_commit(lambda: storage.delete(name), robust=True)
+
+
+@receiver(pre_save, sender=Attachment)
+def remember_replaced_attachment_file(sender, instance, **kwargs):
+    if not instance.pk:
+        return
+
+    try:
+        previous = sender.objects.only("file").get(pk=instance.pk)
+    except sender.DoesNotExist:
+        return
+
+    if previous.file.name != instance.file.name:
+        instance._replaced_file = previous.file
+
+
+@receiver(post_save, sender=Attachment)
+def delete_replaced_attachment_file(sender, instance, **kwargs):
+    previous_file = getattr(instance, "_replaced_file", None)
+    if previous_file:
+        delete_attachment_file_on_commit(previous_file)
+        del instance._replaced_file
+
+
+@receiver(post_delete, sender=Attachment)
+def delete_removed_attachment_file(sender, instance, **kwargs):
+    delete_attachment_file_on_commit(instance.file)

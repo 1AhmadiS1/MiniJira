@@ -10,6 +10,7 @@ from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
 
+    queryset = Workspace.objects.all()
     serializer_class = WorkspaceSerializer
     permission_classes = [IsAuthenticated, IsWorkspace]
     search_fields = ["name", "description"]       # ?search=
@@ -20,6 +21,7 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
 
 
 class WorkspaceMemberViewSet(viewsets.ModelViewSet):
+    queryset = WorkspaceMember.objects.all()
     serializer_class = WorkspaceMemberSerializer
     permission_classes = [IsAuthenticated, IsWorkspaceOwner]
     filterset_fields = ["workspace", "role", "user"]   # ?workspace=&role=

@@ -38,15 +38,15 @@ class GeneralThrottleTests(APITestCase):
         cache.clear()
 
     def test_anonymous_requests_are_throttled_by_ip(self):
-        url = reverse("register")
+        url = reverse("schema")
 
         self.assertEqual(
             self.client.get(url).status_code,
-            status.HTTP_405_METHOD_NOT_ALLOWED,
+            status.HTTP_200_OK,
         )
         self.assertEqual(
             self.client.get(url).status_code,
-            status.HTTP_405_METHOD_NOT_ALLOWED,
+            status.HTTP_200_OK,
         )
         self.assertEqual(
             self.client.get(url).status_code,
@@ -68,6 +68,53 @@ class GeneralThrottleTests(APITestCase):
         self.assertEqual(
             self.client.get(url).status_code,
             status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+
+class ScopedAuthThrottleTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.throttle_rates = patch.dict(
+            SimpleRateThrottle.THROTTLE_RATES,
+            {
+                "register": "2/minute",
+                "login": "2/minute",
+                "token_refresh": "2/minute",
+            },
+        )
+        self.throttle_rates.start()
+
+    def tearDown(self):
+        self.throttle_rates.stop()
+        cache.clear()
+
+    def assert_third_request_is_throttled(self, url, data):
+        self.assertNotEqual(
+            self.client.post(url, data, format="json").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        self.assertNotEqual(
+            self.client.post(url, data, format="json").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        self.assertEqual(
+            self.client.post(url, data, format="json").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    def test_registration_has_stricter_scoped_throttle(self):
+        self.assert_third_request_is_throttled(reverse("register"), {})
+
+    def test_login_has_stricter_scoped_throttle(self):
+        self.assert_third_request_is_throttled(
+            reverse("token_obtain_pair"),
+            {"email": "missing@example.com", "password": "incorrect"},
+        )
+
+    def test_token_refresh_has_stricter_scoped_throttle(self):
+        self.assert_third_request_is_throttled(
+            reverse("token_refresh"),
+            {"refresh": "invalid"},
         )
 
 

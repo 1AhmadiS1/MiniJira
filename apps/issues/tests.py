@@ -800,9 +800,12 @@ class AttachmentTests(APITestCase):
 
     def test_uploader_can_delete(self):
         att = self._make_attachment(uploader=self.member)
+        stored_path = att.file.path
         self.client.force_authenticate(self.member)
-        resp = self.client.delete(f"{ATTACHMENTS_URL}{att.id}/")
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.delete(f"{ATTACHMENTS_URL}{att.id}/")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(att.file.storage.exists(stored_path))
 
     def test_manager_can_delete_others_attachment(self):
         att = self._make_attachment(uploader=self.member)
@@ -827,6 +830,28 @@ class AttachmentTests(APITestCase):
             format="multipart",
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_replacing_file_deletes_previous_file(self):
+        att = self._make_attachment(uploader=self.member)
+        old_name = att.file.name
+        self.client.force_authenticate(self.member)
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.patch(
+                f"{ATTACHMENTS_URL}{att.id}/",
+                {"file": self._upload_file(name="new.txt")},
+                format="multipart",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        att.refresh_from_db()
+        self.assertFalse(att.file.storage.exists(old_name))
+        self.assertTrue(att.file.storage.exists(att.file.name))
+
+    def test_cascade_delete_removes_file(self):
+        att = self._make_attachment(uploader=self.member)
+        stored_name = att.file.name
+        with self.captureOnCommitCallbacks(execute=True):
+            self.issue.delete()
+        self.assertFalse(att.file.storage.exists(stored_name))
 
     def test_issue_is_read_only_on_update(self):
         att = self._make_attachment(uploader=self.member)
