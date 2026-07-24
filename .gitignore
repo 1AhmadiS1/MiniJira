@@ -42,11 +42,7 @@ desktop.ini
 ~$*.docx
 ~$*.xlsx
 
-# Personal notes
-commandline.docx
-disscusion.docx
-aws-production.md
-progress.md
+
 
 # Coverage / test artifacts
 .coverage
